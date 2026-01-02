@@ -97,7 +97,9 @@ jobs:
 
       - name: Executar Playbook Ansible
         run: |
-          ansible-playbook -i inventory ansible/playbook.yml --extra-vars "ansible_sudo_pass=${{ secrets.ADMIN_PASSWORD }}"
+            ansible-playbook -i inventory ansible/playbook.yml \
+            --ssh-extra-args="-o StrictHostKeyChecking=no" \
+            --extra-vars "ansible_sudo_pass=${{ secrets.ADMIN_PASSWORD }}"
 
   post-tests:
     if: ${{ github.event.inputs.destroy == 'false' }}
