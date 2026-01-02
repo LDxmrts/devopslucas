@@ -73,7 +73,7 @@ jobs:
         working-directory: infra
         run: |
           echo "vm_name=vm-automation" >> $GITHUB_OUTPUT
-          echo "admin_username=azureuser" >> $GITHUB_OUTPUT
+          echo "admin_username=suporte" >> $GITHUB_OUTPUT
           echo "public_ip=$(terraform output -raw public_ip_address)" >> $GITHUB_OUTPUT
           echo "nsg_name=$(terraform output -raw nsg_name)" >> $GITHUB_OUTPUT
           echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
@@ -81,9 +81,9 @@ jobs:
       - name: Definir Variáveis de Ambiente
         run: |
           echo "VM_NAME=vm-automation" >> $GITHUB_ENV
-          echo "ADMIN_USERNAME=azureuser" >> $GITHUB_ENV
+          echo "ADMIN_USERNAME=suporte" >> $GITHUB_ENV
           echo "PUBLIC_IP=${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
-          echo "SSH_COMMAND=ssh azureuser@${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
+          echo "SSH_COMMAND=ssh suporte@${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
 
       - name: Instalar Ansible e sshpass
         run: |
