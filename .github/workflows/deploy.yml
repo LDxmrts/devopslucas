@@ -97,7 +97,8 @@ jobs:
 
       - name: Executar Playbook Ansible
         run: |
-            ansible-playbook -i inventory ansible/playbook.yml
+            ansible-playbook -i inventory ansible/playbook.yml \
+            --ssh-extra-args="-o StrictHostKeyChecking=no"
 
   post-tests:
     if: ${{ github.event.inputs.destroy == 'false' }}
