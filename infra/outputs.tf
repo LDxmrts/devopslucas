@@ -1,6 +1,11 @@
 output "public_ip_address" {
   value       = azurerm_public_ip.public_ip.ip_address
-  description = "Endereço IP público da VM"
+  description = "Endereço IP público da VM 1"
+}
+
+output "public_ip_address_2" {
+  value = azurerm_public_ip.public_ip_vm2.ip_address
+  description = "Endereço IP público da VM 2"
 }
 
 output "nsg_name" {

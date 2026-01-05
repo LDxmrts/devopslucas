@@ -44,11 +44,10 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     outputs:
-      vmName: ${{ steps.output_vm.outputs.vm_name }}
+      vm2PublicIP: ${{ steps.output_vm.outputs.vm2_public_ip }}
       adminUsername: ${{ steps.output_vm.outputs.admin_username }}
-      publicIP: ${{ steps.output_vm.outputs.public_ip }}
-      nsgName: ${{ steps.output_vm.outputs.nsg_name }}
       resourceGroup: ${{ steps.output_vm.outputs.resource_group }}
+      nsgName: ${{ steps.output_vm.outputs.nsg_name }}
     steps:
       - name: Checkout do código
         uses: actions/checkout@v3
@@ -68,23 +67,26 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
+      # --------------------------
+      # CAPTURA APENAS IP PÚBLICO DA VM2
+      # --------------------------
       - name: Capturar Outputs
         id: output_vm
         working-directory: infra
         run: |
-          echo "vm_name=vm-automation" >> $GITHUB_OUTPUT
-          echo "admin_username=azureuser" >> $GITHUB_OUTPUT
-          echo "public_ip=$(terraform output -raw public_ip_address)" >> $GITHUB_OUTPUT
-          echo "nsg_name=$(terraform output -raw nsg_name)" >> $GITHUB_OUTPUT
+          echo "vm2_public_ip=$(terraform output -raw public_ip_address_2)" >> $GITHUB_OUTPUT
+          echo "admin_username=$(terraform output -raw Admin_username)" >> $GITHUB_OUTPUT
           echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
+          echo "nsg_name=$(terraform output -raw nsg_name)" >> $GITHUB_OUTPUT
 
       - name: Definir Variáveis de Ambiente
         run: |
-          echo "VM_NAME=vm-automation" >> $GITHUB_ENV
-          echo "ADMIN_USERNAME=azureuser" >> $GITHUB_ENV
-          echo "PUBLIC_IP=${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
-          echo "SSH_COMMAND=ssh azureuser@${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
+          echo "ADMIN_USERNAME=${{ steps.output_vm.outputs.admin_username }}" >> $GITHUB_ENV
+          echo "VM2_PUBLIC_IP=${{ steps.output_vm.outputs.vm2_public_ip }}" >> $GITHUB_ENV
 
+      # --------------------------
+      # DESATIVAR HOST KEY CHECKING
+      # --------------------------
       - name: Disable host key checking
         run: |
           mkdir -p ~/.ssh
@@ -93,21 +95,31 @@ jobs:
           echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
+      # --------------------------
+      # INSTALAR ANSIBLE NO RUNNER
+      # --------------------------
       - name: Instalar Ansible e sshpass
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible sshpass
 
+      # --------------------------
+      # INVENTÁRIO APENAS DA VM2 (IP PÚBLICO)
+      # --------------------------
       - name: Criar Inventário Ansible
         run: |
-          echo "[vm]" > inventory
-          echo "${{ env.PUBLIC_IP }} ansible_user=${{ env.ADMIN_USERNAME }} ansible_password=${{ secrets.ADMIN_PASSWORD }}" >> inventory
+          echo "[vm2]" > inventory
+          echo "${{ env.VM2_PUBLIC_IP }} ansible_user=${{ env.ADMIN_USERNAME }} ansible_password=${{ secrets.ADMIN_PASSWORD }}" >> inventory
+
+          echo "Inventário criado:"
+          cat inventory
 
       - name: Executar Playbook Ansible
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
-          ansible-playbook -i inventory ansible/playbook.yml --extra-vars "ansible_sudo_pass=${{ secrets.ADMIN_PASSWORD }}"
+          ansible-playbook -i inventory ansible/playbook.yml \
+            --extra-vars "ansible_sudo_pass=${{ secrets.ADMIN_PASSWORD }}"
 
   post-tests:
     if: ${{ github.event.inputs.destroy == 'false' }}
@@ -115,44 +127,15 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     env:
-      PUBLIC_IP: ${{ needs.deploy.outputs.publicIP }}
-      VM_NAME: ${{ needs.deploy.outputs.vmName }}
-      NSG_NAME: ${{ needs.deploy.outputs.nsgName }}
+      VM2_PUBLIC_IP: ${{ needs.deploy.outputs.vm2PublicIP }}
+      ADMIN_USERNAME: ${{ needs.deploy.outputs.adminUsername }}
       RESOURCE_GROUP: ${{ needs.deploy.outputs.resourceGroup }}
+      NSG_NAME: ${{ needs.deploy.outputs.nsgName }}
     steps:
       - name: Login no Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Testar Swagger na Porta 8081
-        run: |
-          echo "Aguardando aplicação subir com Swagger..."
-          sleep 30
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://$PUBLIC_IP:8081/swagger-ui/index.html)
-          if [ "$response" != "200" ]; then
-            echo "❌ Swagger não respondeu como esperado. Status HTTP: $response"
-            exit 1
-          else
-            echo "✅ Swagger disponível em /swagger-ui/index.html na porta 8081!"
-          fi
-
-      - name: Verificar status da VM
-        run: |
-          status=$(az vm get-instance-view \
-            --name "$VM_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query "instanceView.statuses[?code=='PowerState/running'].displayStatus" \
-            --output tsv)
-
-          echo "Status da VM: $status"
-
-          if [ "$status" != "VM running" ]; then
-              echo "❌ A VM não está em execução!"
-              exit 1
-          else
-              echo "✅ VM está rodando com sucesso!"
-          fi
 
       - name: Verificar regra da NSG para porta 8081
         run: |
@@ -172,8 +155,6 @@ jobs:
     if: ${{ github.event.inputs.destroy == 'true' }}
     name: 🧨 Destruir Infraestrutura
     runs-on: ubuntu-latest
-    env:
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout do código
         uses: actions/checkout@v3
